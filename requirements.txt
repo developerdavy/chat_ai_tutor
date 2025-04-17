@@ -1,0 +1,13 @@
+langchain
+openai
+faiss-cpu
+python-dotenv
+pymupdf
+pdfplumber
+fastapi
+uvicorn
+gradio
+pandas
+sympy
+tqdm
+google-generativeai
