@@ -3,3 +3,5 @@ venv
 .env
 example.py
 testing.ipynb
+linkedin.py
+audio.mp3

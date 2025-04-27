@@ -1,13 +1,15 @@
-import langchain
 from langchain_community.utilities import SerpAPIWrapper
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.memory import ConversationBufferMemory
-from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain_community.llms import openai
+from langchain.chat_models import ChatOpenAI
+from langchain.agents import create_tool_calling_agent, AgentExecutor, initialize_agent, AgentType
 import os
 import re
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 from langchain.agents import Tool
+import speech_recognition as sr
 
 
 # gemini-1.5-pro
@@ -16,11 +18,9 @@ load_dotenv()
 class AiTutor:
     def __init__(self):
 
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
-            api_key=os.getenv("GEMINI_API"),
-            stream=True,
-        )
+        client = ChatGoogleGenerativeAI(model="gemini-1.5-flash", api_key=os.getenv("GEMINI_API"))
+
+        self.llm = client
 
         self.search = SerpAPIWrapper(
             search_engine="google",
@@ -30,6 +30,7 @@ class AiTutor:
         self.memory = ConversationBufferMemory(
             memory_key="chat_history",
             output_key="output",
+            input_key="topic",
             return_messages=True
         )
 
@@ -73,18 +74,18 @@ class AiTutor:
         
         # Initialize the agent with the tools and prompt
         agent = create_tool_calling_agent(
-            tools=self.tools,
             llm=self.llm,
-            prompt=prompt,
-            )
+            tools=self.tools,
+            prompt=prompt
+        )
 
         agent_executor = AgentExecutor(
-            agent= agent,
+            agent=agent,
             tools=self.tools,
             memory=self.memory,
             verbose=True,
+            return_intermediate_steps=False
         )
-
         if not topic:
             return "Please enter a topic."
 

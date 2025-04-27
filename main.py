@@ -1,58 +1,107 @@
-import threading
-import time
-from tutor import AiTutor
 import streamlit as st
 import pyttsx3
-from text_to_speech import TextToSpeech
-import asyncio
+import time
+from tutor import AiTutor
+import speech_recognition as sr
+from elevenlabs import ElevenLabs, stream
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 tutor = AiTutor()
+recognizer = sr.Recognizer()
 
-st.title("AI Tutor")
+if "tutor" not in st.session_state:
+    st.session_state.tutor = tutor
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+st.title("🎓 AI Tutor")
+
+# Display previous messages
+for msg in st.session_state.messages:
+    with st.chat_message("You"):
+        st.markdown(msg["human"])
+    with st.chat_message("Tutor"):
+        st.markdown(msg["ai"])
 
 topic = st.sidebar.selectbox(
     "SELECT A TOPIC YOU WANT TO LEARN ABOUT",
     ["Math", "Science", "History", "Geography", "Home Science"]
 )
 
-user = st.chat_input("Enter your question here...")
+# Function to listen to voice
+def listen():
+    with sr.Microphone() as source:
+        st.info("🎙️ Listening... Speak now.")
+        audio = recognizer.listen(source)
+    try:
+        st.success("✅ Recognizing speech...")
+        query = recognizer.recognize_google(audio)
+        return query
+    except sr.UnknownValueError:
+        st.warning("❌ Sorry, I couldn't understand what you said.")
+        return None
+    except sr.RequestError as e:
+        st.error(f"⚠️ Error with speech service: {e}")
+        return None
+
+# Text-to-speech
+def speak(text):
+    engine = pyttsx3.init()
+    engine.say(tutor.clean_text_for_speech(text))
+    engine.runAndWait()
 
 
+def eleven_labs_audio(text):
+    client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
 
-
-agent = ""
-if user is not None:
-    st.write(f"You asked:\n", user)
-    agent = tutor.tutor(user)
-
-   
-
-    def stream_agent(agent):
-        for word in agent.split(" "):
-            yield word + " "
-            time.sleep(0.05) # Adjust the delay as needed
-
+    audio_stream = client.text_to_speech.convert(
+        text=text,
+        voice_id="JBFqnCBsd6RMkjVDRZzb",
+        model_id="eleven_multilingual_v2"
+        )
     
+    # stream(audio_stream)
 
-    def speak(agent):
+    with open("audio.mp3", 'wb') as f:
+        for chunk in audio_stream:
+            if chunk:
+                f.write(chunk)
 
-        engine = pyttsx3.init()
-        engine.say(tutor.clean_text_for_speech(agent))
+# Typing input (optional)
+user = st.chat_input("Or type your question here...")
 
-        if engine._inLoop:
-            engine.endLoop()
+# Voice input button
+button_area = st.container()
 
-        engine.runAndWait()
+with button_area:
+    if st.button("🎙️ Ask with your voice"):
+      user = listen()
 
-    for msg in tutor.show_memory_status():
-        print(msg.type, ":", msg.content)
-        # engine = None
-    
-    text = st.write_stream(stream_agent(agent))
+def markdown_streaming(text, delay=0.05):
+    placeholder = st.empty()
+    streamed_text = ""
+    for word in text.split():
+        streamed_text += word + " "
+        placeholder.markdown(streamed_text)
+        time.sleep(delay)
+    return streamed_text
 
-    # speak(agent)
-   
-else:
-    st.write("Please enter a question.")
-   
+# Handle input
+if user:
+    with st.chat_message("You"):
+        st.markdown(user)
+
+    response = tutor.tutor(user)
+
+    with st.chat_message("Tutor"):
+        final_response = markdown_streaming(response)
+        # speak(final_response)
+        eleven_labs_audio(response)
+
+    st.session_state.messages.append({"human": user, "ai": final_response})
+
 
